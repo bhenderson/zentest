@@ -84,7 +84,10 @@ class Autotest
 
   def self.parse_options args = ARGV
     require 'optparse'
-    options = {}
+    options = {
+      :args => args.dup
+    }
+
     OptionParser.new do |opts|
       opts.banner = <<-BANNER.gsub(/^        /, '')
         Continuous testing for your ruby app.
@@ -118,7 +121,7 @@ class Autotest
       end
 
       opts.on("-r", "--rc CONF", String, "Override path to config file") do |o|
-        options[:rc] = o
+        options[:rc] = Array(o)
       end
 
       opts.on("-s", "--style STYLE", String,
@@ -134,7 +137,7 @@ class Autotest
         puts opts
         exit 1
       end
-    end.parse args
+    end.parse! args
 
     Autotest.options.merge! options
 
@@ -289,7 +292,8 @@ class Autotest
     self.prefix            = nil
     self.sleep             = 1
     self.testlib           = "test/unit"
-    self.find_directories  = ARGV.empty? ? ['.'] : ARGV.dup
+    specified_directories  = ARGV.reject { |arg| arg.start_with?("-") } # options are not directories
+    self.find_directories  = specified_directories.empty? ? ['.'] : specified_directories
     self.unit_diff         = nil
     self.latest_results    = nil
 
@@ -437,7 +441,7 @@ class Autotest
   def restart
     Process.kill "KILL", @child if @child
 
-    cmd = [$0, *ARGV]
+    cmd = [$0, *options[:args]]
 
     index = $LOAD_PATH.index RbConfig::CONFIG["sitelibdir"]
 
@@ -840,8 +844,7 @@ class Autotest
     HOOKS[name] << block
   end
 
-  add_hook :died do |at, args|
-    err = *args
+  add_hook :died do |at, err|
     warn "Unhandled exception: #{err}"
     warn err.backtrace.join("\n  ")
     warn "Quitting"
