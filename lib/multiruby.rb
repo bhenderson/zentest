@@ -291,6 +291,15 @@ module Multiruby
     raise "ERROR: Command failed with exit code #{$?}" unless system cmd
   end
 
+  def setenv dir
+    bin  = "#{dir}/bin"
+    gem  = Dir["#{dir}/lib/ruby/gems/*"].first
+
+    ENV['PATH'] = bin + File::PATH_SEPARATOR + ENV['PATH']
+    ENV['GEM_HOME'] = gem
+    ENV['GEM_PATH'] = gem
+  end
+
   def setup_dirs download = true
     %w(build install versions tmp).each do |dir|
       unless test ?d, dir then

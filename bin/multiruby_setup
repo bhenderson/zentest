@@ -16,6 +16,20 @@ ARGV << "help" if ARGV.empty?
 Dir.chdir root_dir
 setup_dirs(false)
 
+# mrs() { exec 3>&1; eval "$(~/bin/mr "$@")"; exec 3>&-; }
+# switch stdout to fd3. eval will only read from fd1
+FD = STDOUT.dup
+begin
+  io = IO.for_fd(3)
+  io.sync = true
+  STDOUT.reopen io
+rescue Errno::EBADF
+  # if fd3 is not open, STDOUT will remain unchanged.
+end
+
+# TODO rename?
+def shell(*args) FD.puts *args end
+
 ARGV.each do |spec|
   case spec
   when "-h", "--help", "help" then
