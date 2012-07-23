@@ -16,8 +16,7 @@ ARGV << "help" if ARGV.empty?
 Dir.chdir root_dir
 setup_dirs(false)
 
-# mrs() { exec 3>&1; eval "$(~/bin/mr "$@")"; exec 3>&-; }
-# switch stdout to fd3. eval will only read from fd1
+# switch stdout to fd3. eval will only read from fd1. See 'setup'
 FD = STDOUT.dup
 begin
   io = IO.for_fd(3)
@@ -28,9 +27,9 @@ rescue Errno::EBADF
 end
 
 # TODO rename?
-def shell(*args) FD.puts *args end
+def shell(*args) FD.puts(*args) end
 
-ARGV.each do |spec|
+ARGV.each_with_index do |spec, index|
   case spec
   when "-h", "--help", "help" then
     help
@@ -89,6 +88,53 @@ ARGV.each do |spec|
   when /mri:tar:(.*)/ then
     fetch_tar $1
     ARGV << "build"
+  # mrs functions
+  when 'use' then
+    version = ARGV[index+1] or abort 'version string required'
+    dir  = Dir["#{root_dir}/install/#{version}"].first or
+      abort "unknown version #{version}"
+    bin  = "#{dir}/bin"
+    gem  = Dir["#{dir}/lib/ruby/gems/*"].first.to_s
+    # remove any previous multiruby from path and append this one.
+    path = ENV['PATH'].split(File::PATH_SEPARATOR).
+             delete_if{|p| p =~ /multiruby/}.
+             unshift(bin).
+             join(File::PATH_SEPARATOR)
+
+    shell 'export PATH='     + path
+    shell 'export GEM_HOME=' + gem
+    shell 'export GEM_PATH=' + gem
+    shell 'hash -r' # clear shell hashed locations
+    exit 0
+  when 'alias' then
+    # setup aliases
+    version, name = ARGV[index+1,2]
+    in_install_dir do
+      # symlink force isn't working
+      FileUtils.rm_f name if test ?l, name
+      FileUtils.ln_sf version, name
+    end
+    exit 0
+  # setup shell function in .bashrc
+  when 'setup' then
+    # TODO should put 'mrs use default' when do we alias default?
+    puts 'Adding shell function to ~/.bashrc'
+    File.open File.expand_path('~/.bashrc'), 'a' do |f|
+      # eval output. Anything on fd3 will not get eval'd. That's why we
+      # switched stdout to it. Then close fd3.
+      f.puts <<-EOS.gsub!(/^ */,'')
+
+        # shell function
+        mrs() { exec 3>&1; eval \"$(#{__FILE__} \"$@\")\"; exec 3>&-; }
+        # tab completion function
+        _mrs() {
+          local cur=${COMP_WORDS[COMP_CWORD]}
+          COMPREPLY=( $( compgen -W '`ls #{root_dir}/install/`' -- $cur ) )
+        }
+        complete -F _mrs mrs
+      EOS
+      #f.puts 'mrs use default'
+    end
   else
     warn "unknown spec #{spec}"
   end
