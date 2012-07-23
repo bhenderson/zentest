@@ -510,6 +510,7 @@ class Autotest
     self.find_order.clear
 
     targets.each do |target|
+      next unless test ?e, target
       order = []
       Find.find target do |f|
         Find.prune if f =~ self.exceptions
