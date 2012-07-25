@@ -22,7 +22,7 @@ begin
   io = IO.for_fd(3)
   io.sync = true
   STDOUT.reopen io
-rescue Errno::EBADF
+rescue Errno::EBADF, ArgumentError
   # if fd3 is not open, STDOUT will remain unchanged.
 end
 
@@ -90,20 +90,29 @@ ARGV.each_with_index do |spec, index|
     ARGV << "build"
   # mrs functions
   when 'use' then
+    # TODO separate method
     version = ARGV[index+1] or abort 'version string required'
-    dir  = Dir["#{root_dir}/install/#{version}"].first or
-      abort "unknown version #{version}"
-    bin  = "#{dir}/bin"
-    gem  = Dir["#{dir}/lib/ruby/gems/*"].first.to_s
+    bin = dir = gem = ver = ''
+    unless version == 'system'
+      dir  = Dir["#{root_dir}/install/#{version}"].first or
+        abort "unknown version #{version}"
+      dir  = File.readlink dir if test ?l, dir
+      ver  = File.basename dir
+      bin  = "#{dir}/bin"
+      gem  = Dir["#{dir}/lib/ruby/gems/*"].first.to_s
+    else
+      ver  = version
+    end
     # remove any previous multiruby from path and append this one.
     path = ENV['PATH'].split(File::PATH_SEPARATOR).
-             delete_if{|p| p =~ /multiruby/}.
-             unshift(bin).
-             join(File::PATH_SEPARATOR)
+             delete_if{|p| p =~ /multiruby/}
 
-    shell 'export PATH='     + path
-    shell 'export GEM_HOME=' + gem
-    shell 'export GEM_PATH=' + gem
+    path.unshift(bin) if bin
+
+    shell 'export PATH='              + path.join(File::PATH_SEPARATOR)
+    shell 'export GEM_HOME='          + gem
+    shell 'export GEM_PATH='          + gem
+    shell 'export MULTIRUBY_CURRENT=' + ver
     shell 'hash -r' # clear shell hashed locations
     exit 0
   when 'alias' then
@@ -117,13 +126,13 @@ ARGV.each_with_index do |spec, index|
     exit 0
   # setup shell function in .bashrc
   when 'setup' then
-    # TODO should put 'mrs use default' when do we alias default?
     puts 'Adding shell function to ~/.bashrc'
     File.open File.expand_path('~/.bashrc'), 'a' do |f|
       # eval output. Anything on fd3 will not get eval'd. That's why we
       # switched stdout to it. Then close fd3.
       f.puts <<-EOS.gsub!(/^ */,'')
 
+        ### multiruby ###
         # shell function
         mrs() { exec 3>&1; eval \"$(#{__FILE__} \"$@\")\"; exec 3>&-; }
         # tab completion function
@@ -132,8 +141,9 @@ ARGV.each_with_index do |spec, index|
           COMPREPLY=( $( compgen -W '`ls #{root_dir}/install/`' -- $cur ) )
         }
         complete -F _mrs mrs
+        mrs use default
+        ### multiruby ###
       EOS
-      #f.puts 'mrs use default'
     end
   else
     warn "unknown spec #{spec}"
