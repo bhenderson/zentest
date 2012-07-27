@@ -158,7 +158,7 @@ ARGV.each_with_index do |spec, index|
         # tab completion function
         _mrs() {
           local cur=${COMP_WORDS[COMP_CWORD]}
-          COMPREPLY=( $( compgen -W '`ls #{root_dir}/install/`' -- $cur ) )
+          COMPREPLY=( $( compgen -W 'use list setup alias `ls #{root_dir}/install/`' -- $cur ) )
         }
         complete -F _mrs -f mrs
         mrs use default
