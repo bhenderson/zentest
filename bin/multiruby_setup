@@ -160,7 +160,7 @@ ARGV.each_with_index do |spec, index|
           local cur=${COMP_WORDS[COMP_CWORD]}
           COMPREPLY=( $( compgen -W '`ls #{root_dir}/install/`' -- $cur ) )
         }
-        complete -F _mrs mrs
+        complete -F _mrs -f mrs
         mrs use default
         ### multiruby ###
       EOS
