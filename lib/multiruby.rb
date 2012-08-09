@@ -105,6 +105,7 @@ module Multiruby
                 rake_build inst_dir
               elsif build_dir =~ /^jruby/
                 FileUtils.ln_sf "../build/#{version}", inst_dir
+                FileUtils.ln_sf "jruby", "bin/ruby"
               else
                 raise "dunno how to build"
               end
