@@ -49,10 +49,12 @@ module Multiruby
   TAGS     = %w(    1_8_7 1_9_1 1_9_2)
   BRANCHES = %w(1_8 1_8_7 1_9 trunk)
 
-  VERSIONS = env('VERSIONS', TAGS.join(":").gsub(/_/, '.')).split(/:/)
-  MRI_SVN  = env 'MRI_SVN',  'http://svn.ruby-lang.org/repos/ruby'
-  RUBY_URL = env 'RUBY_URL', 'http://ftp.ruby-lang.org/pub/ruby'
-  GEM_URL  = env 'GEM_URL',  'http://files.rubyforge.vm.bytemark.co.uk/rubygems'
+  VERSIONS   = env('VERSIONS',   TAGS.join(":").gsub(/_/, '.')).split(/:/)
+  MRI_SVN    = env 'MRI_SVN',    'http://svn.ruby-lang.org/repos/ruby'
+  RUBY_URL   = env 'RUBY_URL',   'http://ftp.ruby-lang.org/pub/ruby'
+  JRUBY_URL  = env 'JRUBY_URL',  'http://jruby.org.s3.amazonaws.com/downloads'
+  JRUBY_LIST = env 'JRUBY_LIST', 'http://jruby.org/files/downloads/index.html'
+  GEM_URL    = env 'GEM_URL',    'http://files.rubyforge.vm.bytemark.co.uk/rubygems'
 
   HELP = []
 
@@ -79,6 +81,7 @@ module Multiruby
           next if tarball =~ /rubygems/
 
           build_dir = File.basename tarball, ".tar.gz"
+          build_dir.sub!(/^jruby-bin/, 'jruby')
           version = build_dir.sub(/^ruby-?/, '')
           versions << version
           inst_dir = "#{root_dir}/install/#{version}"
@@ -100,11 +103,14 @@ module Multiruby
                 gnu_utils_build inst_dir
               elsif test ?f, "Rakefile" then
                 rake_build inst_dir
+              elsif build_dir =~ /^jruby/
+                FileUtils.ln_sf "../build/#{version}", inst_dir
+                FileUtils.ln_sf "jruby", "bin/ruby"
               else
                 raise "dunno how to build"
               end
 
-              if rubygem_tarball and version !~ /1[._-]9|mri_trunk|rubinius/ then
+              if rubygem_tarball and version !~ /1[._-]9|jruby|mri_trunk|rubinius/ then
                 rubygems = File.basename rubygem_tarball, ".tgz"
                 run "tar zxf #{rubygem_tarball}" unless test ?d, rubygems
 
@@ -171,6 +177,21 @@ module Multiruby
     versions
   end
 
+  def fetch_jruby_bin v
+    in_versions_dir do
+      base = "jruby-bin-#{v}.tar.gz"
+      url  = File.join JRUBY_URL, v, base
+      unless File.file? base then
+        warn "    Fetching #{base} via HTTP... this might take a while."
+        open(url) do |f|
+          File.open base, 'w' do |out|
+            out.write f.read
+          end
+        end rescue abort "#{base} #{$!}"
+      end
+    end
+  end
+
   def fetch_tar v
     in_versions_dir do
       warn "  Determining latest version for #{v}"
@@ -186,6 +207,19 @@ module Multiruby
           end
         end
       end
+    end
+  end
+
+  # read from +cache+ else write return value of block to cache
+  def get_cache cache
+    in_tmp_dir do
+      File.unlink cache if Time.now - File.mtime(cache) > 3600 rescue nil
+
+      File.open cache, "w" do |f|
+        f.write yield
+      end unless File.exist? cache
+
+      File.read(cache).split(/\n/)
     end
   end
 
@@ -324,17 +358,21 @@ module Multiruby
     end
   end
 
-  def tags
-    tags = nil
-    in_tmp_dir do
-      cache = "svn.tag.cache"
-      File.unlink cache if Time.now - File.mtime(cache) > 3600 rescue nil
-
-      File.open cache, "w" do |f|
-        f.write `svn ls #{MRI_SVN}/tags/`
-      end unless File.exist? cache
-
-      tags = File.read(cache).split(/\n/).grep(/^v/).reject {|s| s =~ /preview/}
+  def tags type = :mri
+    case type
+    when :mri then
+      tags = get_cache "svn.tag.cache" do
+        `svn ls #{MRI_SVN}/tags/`
+      end
+      tags = tags.grep(/^v/).reject {|s| s =~ /community|preview/}
+    when :jruby then
+      tags = get_cache "jruby.bin.cache" do
+        open(JRUBY_LIST).read.
+          scan(%r|href='/files/downloads/(.*)/index.html|).join("\n")
+      end
+      tags.pop # community-ruby
+    else
+      tags = []
     end
 
     tags = tags.sort_by { |t| t.scan(/\d+/).map { |s| s.to_i } }

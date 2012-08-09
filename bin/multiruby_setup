@@ -165,6 +165,11 @@ ARGV.each_with_index do |spec, index|
         ### multiruby ###
       EOS
     end
+  when 'jruby:bins' then
+    p tags :jruby
+  when /jruby:bin:(.*)/ then
+    fetch_jruby_bin $1
+    ARGV << "build"
   else
     warn "unknown spec #{spec}"
   end
