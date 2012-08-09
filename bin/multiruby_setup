@@ -75,6 +75,11 @@ ARGV.each do |spec|
   when /mri:tar:(.*)/ then
     fetch_tar $1
     ARGV << "build"
+  when 'jruby:bins' then
+    p tags :jruby
+  when /jruby:bin:(.*)/ then
+    fetch_jruby_bin $1
+    ARGV << "build"
   else
     warn "unknown spec #{spec}"
   end
