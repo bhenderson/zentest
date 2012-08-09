@@ -13,6 +13,19 @@ def setenv dir
   ENV['GEM_PATH'] = gem
 end
 
+def ruby_bin dir
+  ruby = case dir
+  when /jruby/ then
+    'jruby'
+  when /rubinius/ then
+    'rbx'
+  else
+    'ruby'
+  end
+
+  File.join dir, 'bin', ruby
+end
+
 ##
 # multiruby -1 1.8.7 ruby_args...
 
@@ -26,7 +39,7 @@ if ARGV.first == "-1" then
   dir = vers.first
   setenv dir
 
-  exec "#{dir}/bin/ruby", *ARGV
+  exec ruby_bin(dir), *ARGV
 end
 
 versions = Multiruby.build_and_install
@@ -43,9 +56,7 @@ original_path = ENV['PATH']
 results = {}
 versions.each do |version|
   dir  = "#{root_dir}/install/#{version}"
-  ruby = "#{dir}/bin/ruby"
-
-  ruby.sub!(/bin.ruby/, 'bin/rbx') if version =~ /rubinius/
+  ruby = ruby_bin dir
 
   puts
   puts "VERSION = #{version}"
