@@ -147,14 +147,23 @@ ARGV.each_with_index do |spec, index|
   # setup shell function in .bashrc
   when 'setup' then
     puts 'Adding shell function to ~/.bashrc'
+
     File.open File.expand_path('~/.bashrc'), 'a' do |f|
       # eval output. Anything on fd3 will not get eval'd. That's why we
       # switched stdout to it. Then close fd3.
-      f.puts <<-EOS.gsub!(/^ */,'')
+      f.puts <<-EOS.gsub!(/^        /,'')
 
         ### multiruby ###
         # shell function
-        mrs() { exec 3>&1; eval \"$(#{__FILE__} \"$@\")\"; exec 3>&-; }
+        mrs() {
+          local ruby=#{Gem.ruby}
+          local lib=#{File.expand_path '../../lib', __FILE__}
+          local file=#{__FILE__}
+
+          exec 3>&1
+          eval \"$($ruby -I$lib $file \"$@\")\"
+          exec 3>&-
+        }
         # tab completion function
         _mrs() {
           local cur=${COMP_WORDS[COMP_CWORD]}
